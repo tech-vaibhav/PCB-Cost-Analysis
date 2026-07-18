@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Environment variables
+.env
+*.env
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Test files (keep folder, ignore actual Gerber ZIPs — may contain proprietary PCB data)
+backend/test_files/*.zip
+backend/test_files/*.rar
+test_files/*.zip
+
+# Logs
+*.log
+logs/
+
+# Temp / cache
+.cache/
+tmp/
+temp/
