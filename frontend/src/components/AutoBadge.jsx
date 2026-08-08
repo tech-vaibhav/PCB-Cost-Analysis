@@ -1,10 +1,9 @@
-// AutoBadge — shown next to fields that were auto-filled by the parser
+import { Check } from 'lucide-react'
+
 export default function AutoBadge() {
   return (
-    <span className="auto-badge">
-      <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="2,6 5,9 10,3" />
-      </svg>
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 border border-emerald-200 rounded-full text-[11px] font-semibold text-emerald-700">
+      <Check className="w-2.5 h-2.5" strokeWidth={3} />
       Auto-detected
     </span>
   )
