@@ -239,42 +239,101 @@ def _parse_graphic_layer(
 def _parse_drill_files(stack: LayerStack) -> DrillInfo:
     """
     Aggregate drill info from all Excellon files in the LayerStack.
-    gerbonara splits drill files into PTH (drill_pth), NPTH (drill_npth),
-    and any additional drill_layers.
+    Scans stack.drill_pth, stack.drill_npth, stack._drill_layers, and stack.tmpdir.
+    Performs subset deduplication to prevent double-counting when EDA software (e.g. EasyEDA)
+    exports both a combined drill file (Drill_PTH_Through.DRL) and split breakdown files
+    (Drill_PTH_Through_Via.DRL).
     """
+    candidates: list[tuple[str, object]] = []
+
+    def _add_candidate(drill_file, label: str):
+        if drill_file is None or getattr(drill_file, "is_empty", True):
+            return
+        try:
+            hits = drill_file.hit_count()
+            if sum(hits.values()) > 0:
+                candidates.append((label, drill_file))
+        except Exception:
+            pass
+
+    _add_candidate(stack.drill_pth, "PTH drill")
+    _add_candidate(stack.drill_npth, "NPTH drill")
+    for i, dl in enumerate(getattr(stack, "_drill_layers", [])):
+        _add_candidate(dl, f"extra drill layer {i}")
+
+    # Check stack.tmpdir for any extra drill files missed by gerbonara's auto-guesser
+    if getattr(stack, "tmpdir", None):
+        try:
+            tmp_path = Path(stack.tmpdir.name)
+            for p in tmp_path.rglob("*"):
+                if p.is_file() and p.suffix.lower() in (".drl", ".txt", ".exc", ".xln"):
+                    try:
+                        ef = ExcellonFile.open(p)
+                        _add_candidate(ef, p.name)
+                    except Exception:
+                        pass
+        except Exception as exc:
+            logger.debug("Error checking tmpdir for extra drills: %s", exc)
+
+    # Convert candidates to structured drill data
+    parsed_files = []
+    for label, ef in candidates:
+        try:
+            hit_map = {
+                round(tool.diameter, 4): count
+                for tool, count in ef.hit_count().items()
+                if count > 0
+            }
+            if not hit_map:
+                continue
+            total_hits = sum(hit_map.values())
+            parsed_files.append((label, hit_map, total_hits, ef))
+        except Exception as exc:
+            logger.debug("Drill parse error for %s: %s", label, exc)
+
+    # Sort by number of unique tool sizes descending (larger combined files first)
+    parsed_files.sort(key=lambda x: len(x[1]), reverse=True)
+
+    kept_files = []
+    for label, hits, total_hits, ef in parsed_files:
+        # Check if 'hits' is an exact match or subset of an already kept file
+        is_duplicate_or_subset = False
+        for k_label, k_hits, k_total, k_ef in kept_files:
+            # Exact match check
+            if hits == k_hits:
+                logger.debug("Ignoring duplicate drill file %s (matches %s)", label, k_label)
+                is_duplicate_or_subset = True
+                break
+            # Subset check: all tool diameters in 'hits' are in 'k_hits' with identical counts,
+            # but 'hits' has fewer unique tools (e.g. Vias-only subset file).
+            if len(hits) < len(k_hits) and all(
+                dia in k_hits and k_hits[dia] == count for dia, count in hits.items()
+            ):
+                logger.debug("Ignoring subset drill file %s (subset of %s)", label, k_label)
+                is_duplicate_or_subset = True
+                break
+
+        if not is_duplicate_or_subset:
+            kept_files.append((label, hits, total_hits, ef))
+
+    # Aggregate final statistics from kept files
     total = 0
     pth_count = 0
     npth_count = 0
     all_sizes: set[float] = set()
 
-    def _process(drill_file, label: str):
-        nonlocal total, pth_count, npth_count
-        if drill_file is None or drill_file.is_empty:
-            return
-        try:
-            sizes = drill_file.drill_sizes(unit=MM)
-            all_sizes.update(round(s, 4) for s in sizes if s > 0)
+    for label, hits, total_hits, ef in kept_files:
+        total += total_hits
+        all_sizes.update(hits.keys())
 
-            hit_counts = drill_file.hit_count()
-            hits = sum(hit_counts.values())
-            total += hits
+        if getattr(ef, "is_plated", False):
+            pth_count += total_hits
+        elif getattr(ef, "is_nonplated", False):
+            npth_count += total_hits
+        else:
+            pth_count += total_hits
 
-            if drill_file.is_plated:
-                pth_count += hits
-            elif drill_file.is_nonplated:
-                npth_count += hits
-            else:
-                # Mixed or unknown — count all as PTH (conservative estimate)
-                pth_count += hits
-
-            logger.debug("  %s: %d hits, sizes=%s", label, hits, sizes)
-        except Exception as exc:
-            logger.debug("drill parse error (%s): %s", label, exc)
-
-    _process(stack.drill_pth, "PTH drill")
-    _process(stack.drill_npth, "NPTH drill")
-    for i, dl in enumerate(stack._drill_layers):
-        _process(dl, f"extra drill layer {i}")
+        logger.debug("Kept drill file %s: %d hits, sizes=%s", label, total_hits, list(hits.keys()))
 
     sorted_sizes = sorted(all_sizes)
     return DrillInfo(
@@ -295,15 +354,64 @@ def _parse_dimensions(stack: LayerStack) -> Optional[BoardDimensions]:
     """
     Extract board dimensions in mm.
     Tries board outline first (most accurate), falls back to full bounding box.
+
+    Note: gerbonara occasionally mis-identifies the generator (e.g. Eagle as Altium)
+    and returns board_bounds in raw inch coordinates without converting to MM.
+    We detect this with a sanity check (>600mm single dimension is uncommon for
+    most PCBs) and correct by summing individual layer bounding boxes.
     """
+    # Maximum plausible single board dimension in mm.
+    # Anything larger strongly suggests a unit-conversion bug in gerbonara.
+    _MAX_REASONABLE_MM = 600.0
+
     try:
         bounds = stack.board_bounds(unit=MM)
         source = "outline" if stack.outline else "bounding_box"
         if bounds is None:
             return None
         (x_min, y_min), (x_max, y_max) = bounds
-        w = round(x_max - x_min, 4)
-        h = round(y_max - y_min, 4)
+        w_raw = x_max - x_min
+        h_raw = y_max - y_min
+
+        # Sanity check: if dimensions are suspiciously large, gerbonara likely
+        # returned raw inch coordinates instead of converting to MM.
+        if w_raw > _MAX_REASONABLE_MM or h_raw > _MAX_REASONABLE_MM:
+            logger.debug(
+                "board_bounds returned %.2f x %.2f mm — looks like raw-inch data. "
+                "Attempting per-layer bounding box as correction.",
+                w_raw, h_raw,
+            )
+            # Try per-layer bbox which calls bounding_box(unit=MM) per file
+            # and handles unit conversion correctly via gerbonara's file-level API.
+            all_layers = list(stack.graphic_layers.values())
+            if stack.outline:
+                all_layers = [stack.outline]   # prefer outline only
+            lx0 = ly0 = float("inf")
+            lx1 = ly1 = float("-inf")
+            corrected = False
+            for layer in all_layers:
+                if layer is None:
+                    continue
+                try:
+                    bb = layer.bounding_box(unit=MM)
+                    if bb:
+                        (bx0, by0), (bx1, by1) = bb
+                        lx0 = min(lx0, bx0); ly0 = min(ly0, by0)
+                        lx1 = max(lx1, bx1); ly1 = max(ly1, by1)
+                        corrected = True
+                except Exception:
+                    pass
+            if corrected and lx1 > lx0 and ly1 > ly0:
+                w_raw = lx1 - lx0
+                h_raw = ly1 - ly0
+                source = "outline" if stack.outline else "bounding_box"
+                logger.debug("Corrected dimensions: %.4f x %.4f mm", w_raw, h_raw)
+            else:
+                # Could not correct — return None so caller logs a warning
+                return None
+
+        w = round(w_raw, 4)
+        h = round(h_raw, 4)
         area = round((w * h) / 100, 4)   # mm² → cm²
         return BoardDimensions(
             width_mm=w,
@@ -362,17 +470,42 @@ _ALTIUM_RULES: list[tuple[str, str, str]] = [
     ("top",    "paste",   r"(paste.*top|f[._]paste|gtp)"),
     ("bottom", "paste",   r"(paste.*bot|b[._]paste|gbp)"),
     # Board outline / edge cuts
-    ("mechanical", "outline", r"(profile|edge.*cut|board.*outline|gko|outline|keepout|keep.out)"),
-    # Mechanical / fab layers (skip — not needed for costing)
+    ("mechanical", "outline", r"(profile|edge.*cut|board.*outline|gko|gml|outline|keepout|keep.out)"),
+    # Mechanical / fab layers (skip -- not needed for costing)
     ("mechanical", "other",   r"mechanical"),
 ]
 
 
-def _classify_altium(stem: str) -> tuple[str, str] | None:
+# Extension-to-(side,use) map for Eagle/Protel shorthand Gerber extensions.
+# These are UNAMBIGUOUS — extension alone determines the layer type.
+_EXT_MAP: dict[str, tuple[str, str]] = {
+    ".gtl": ("top",        "copper"),
+    ".gbl": ("bottom",     "copper"),
+    ".gts": ("top",        "mask"),
+    ".gbs": ("bottom",     "mask"),
+    ".gto": ("top",        "silk"),
+    ".gbo": ("bottom",     "silk"),
+    ".gtp": ("top",        "paste"),
+    ".gbp": ("bottom",     "paste"),
+    ".gko": ("mechanical", "outline"),
+    ".gml": ("mechanical", "outline"),  # Eagle mechanical/board-outline
+}
+
+
+def _classify_altium(stem: str, ext: str = "") -> tuple[str, str] | None:
     """
-    Return (side, use) for a Gerber file based on its filename stem,
-    or None if we cannot classify it.
+    Return (side, use) for a Gerber file based on its filename stem + extension.
+    Strategy:
+      1. If the extension is an unambiguous Eagle/Protel shorthand, use it directly.
+      2. Otherwise regex-match the stem (Altium-style named files).
     """
+    # Step 1: extension-first (Eagle/Protel shorthand)
+    if ext:
+        result = _EXT_MAP.get(ext.lower())
+        if result:
+            return result
+
+    # Step 2: stem keyword match (Altium / KiCad style)
     s = stem.lower().replace(" ", "_")
     for side, use, pattern in _ALTIUM_RULES:
         if re.search(pattern, s):
@@ -406,9 +539,15 @@ def _fallback_parse_zip(
         "has_outline": False, "has_drill": False,
     }
 
-    # Bounding-box tracking for board dimensions
+    # Bounding boxes: track outline separately for accuracy.
+    # Priority: outline layer > copper layers > all layers.
+    # Paste/silk/mask can extend beyond the board edge — never use them for dimensions.
     x_min = y_min = float("inf")
     x_max = y_max = float("-inf")
+    
+    # Accumulators per layer type (reset from outer scope)
+    _ol_x0 = _ol_y0 = float("inf");  _ol_x1 = _ol_y1 = float("-inf")
+    _cu_x0 = _cu_y0 = float("inf");  _cu_x1 = _cu_y1 = float("-inf")
     has_bounds = False
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -418,7 +557,10 @@ def _fallback_parse_zip(
         with zipfile.ZipFile(BytesIO(zip_bytes)) as zf:
             zf.extractall(tmp)
 
-        for fpath in tmp.iterdir():
+        # Use rglob to handle ZIPs that contain files inside subdirectories
+        for fpath in tmp.rglob("*"):
+            if not fpath.is_file():
+                continue
             stem   = fpath.stem
             suffix = fpath.suffix.lower()
             name   = fpath.name
@@ -442,11 +584,16 @@ def _fallback_parse_zip(
                 continue
 
             # --- Gerber graphic layers ---
-            if suffix not in (".gbr", ".ger", ".gtl", ".gbl", ".gts", ".gbs",
-                               ".gto", ".gbo", ".gtp", ".gbp", ".gko"):
+            # Recognized extensions: standard .gbr/.ger + Eagle/Protel shorthand extensions
+            if suffix not in (".gbr", ".ger",
+                               ".gtl", ".gbl",   # top/bottom copper
+                               ".gts", ".gbs",   # top/bottom mask
+                               ".gto", ".gbo",   # top/bottom silk
+                               ".gtp", ".gbp",   # top/bottom paste
+                               ".gko", ".gml"):  # board outline
                 continue
 
-            classification = _classify_altium(stem)
+            classification = _classify_altium(stem, ext=suffix)
             if classification is None:
                 logger.debug("Cannot classify '%s' -- skipping", name)
                 warnings.append(f"Unrecognised layer skipped: {name}")
@@ -464,16 +611,25 @@ def _fallback_parse_zip(
             try:
                 gf = GerberFile.open(fpath)
 
-                # Bounding box
-                try:
-                    bounds = gf.bounding_box(unit=MM)
-                    if bounds:
-                        (bx0, by0), (bx1, by1) = bounds
-                        x_min = min(x_min, bx0); y_min = min(y_min, by0)
-                        x_max = max(x_max, bx1); y_max = max(y_max, by1)
-                        has_bounds = True
-                except Exception:
-                    pass
+                # ── Bounding box ─────────────────────────────────────────────
+                # Only outline and copper layers give reliable board extents.
+                # Paste/silk/mask can extend beyond the physical board edge.
+                if use_str in ("outline", "copper"):
+                    try:
+                        bounds = gf.bounding_box(unit=MM)
+                        if bounds:
+                            (bx0, by0), (bx1, by1) = bounds
+                            if use_str == "outline":
+                                # Outline is the most authoritative source
+                                _ol_x0 = min(_ol_x0, bx0); _ol_y0 = min(_ol_y0, by0)
+                                _ol_x1 = max(_ol_x1, bx1); _ol_y1 = max(_ol_y1, by1)
+                            else:
+                                # Copper as fallback
+                                _cu_x0 = min(_cu_x0, bx0); _cu_y0 = min(_cu_y0, by0)
+                                _cu_x1 = max(_cu_x1, bx1); _cu_y1 = max(_cu_y1, by1)
+                            has_bounds = True
+                    except Exception:
+                        pass
 
                 info = _parse_graphic_layer(side_str, use_str, gf)
                 info = info.model_copy(update={"filename": name})
@@ -507,17 +663,27 @@ def _fallback_parse_zip(
     )
     flags["has_drill"] = drill_total > 0
 
-    # Build BoardDimensions
+    # Build BoardDimensions — prefer outline, fall back to copper union
     dims: Optional[BoardDimensions] = None
-    if has_bounds and x_max > x_min and y_max > y_min:
-        w = round(x_max - x_min, 4)
-        h = round(y_max - y_min, 4)
-        dims = BoardDimensions(
-            width_mm=w,
-            height_mm=h,
-            area_cm2=round((w * h) / 100, 4),
-            source="bounding_box",
-        )
+    if has_bounds:
+        if _ol_x1 > _ol_x0:        # outline layer found
+            x0, y0, x1, y1 = _ol_x0, _ol_y0, _ol_x1, _ol_y1
+            src = "outline"
+        elif _cu_x1 > _cu_x0:      # copper layers found
+            x0, y0, x1, y1 = _cu_x0, _cu_y0, _cu_x1, _cu_y1
+            src = "bounding_box"
+        else:
+            x0 = y0 = x1 = y1 = 0; src = "bounding_box"
+
+        if x1 > x0 and y1 > y0:
+            w = round(x1 - x0, 4)
+            h = round(y1 - y0, 4)
+            dims = BoardDimensions(
+                width_mm=w,
+                height_mm=h,
+                area_cm2=round((w * h) / 100, 4),
+                source=src,
+            )
 
     return layer_infos, drill_info, dims, flags
 
@@ -563,8 +729,9 @@ def parse_gerber_zip(
                     filename, stack.board_name, stack.generator)
     except (ValueError, SystemError) as exc:
         # gerbonara couldn't auto-map the layer names (e.g. Altium export)
-        logger.warning(
-            "LayerStack.open_zip failed for '%s' (%s) — switching to fallback parser.",
+        # Log at DEBUG only — this is an expected code path, not an error.
+        logger.debug(
+            "LayerStack.open_zip could not auto-map '%s' — switching to fallback parser. (%s)",
             filename, exc,
         )
         warnings.append(

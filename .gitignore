@@ -30,7 +30,18 @@ env/
 Thumbs.db
 desktop.ini
 
-# Test files — ZIPs are tracked for reproducible testing
+# ── Excel / spreadsheet outputs (do not commit) ─────────────
+*.xlsx
+*.xls
+*.csv
+
+# ── Backend results folder (generated output) ───────────────
+backend/results/
+
+# ── Frontend node_modules & build output ────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
 
 # Logs
 *.log
