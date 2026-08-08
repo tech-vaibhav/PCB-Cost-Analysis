@@ -18,8 +18,8 @@ from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
-from backend.gerber_parser import parse_gerber_zip
-from backend.pricing_engine import calculate_price
+from backend.services.parser import parse_gerber_zip
+from backend.services.pricing import calculate_price
 
 
 logger = logging.getLogger(__name__)
@@ -75,7 +75,7 @@ async def parse_gerber(file: UploadFile = File(...)):
         # ---- CSV export ----
         try:
             import csv
-            results_dir = Path(__file__).parent / "results"
+            results_dir = Path(__file__).parent.parent / "results"
             results_dir.mkdir(exist_ok=True)
             csv_path = results_dir / f"{Path(file.filename).stem}.csv"
             with csv_path.open('w', newline='', encoding='utf-8') as csvfile:

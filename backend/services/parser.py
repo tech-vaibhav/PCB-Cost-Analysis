@@ -54,7 +54,7 @@ from gerbonara.rs274x import GerberFile
 from gerbonara.excellon import ExcellonFile
 from gerbonara.utils import MM
 
-from .models import (
+from backend.models.schemas import (
     ApertureSummary,
     BoardDimensions,
     DrillInfo,

@@ -31,7 +31,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 # Import the router that lives in the same package
-from backend.routes import router
+from backend.routes.gerber import router
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -45,7 +45,7 @@ app = FastAPI(
 # Allow the Vite dev server (http://localhost:5173) to call the API during development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["http://localhost:5174", "http://127.0.0.1:5173"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -75,4 +75,4 @@ if DIST.exists():
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("backend.api:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)

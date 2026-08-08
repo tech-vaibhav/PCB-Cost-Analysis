@@ -34,17 +34,17 @@ const LAYER_OPTIONS = ['1', '2', '4', '6', '8', '10', '12', '14'].map(v => ({
 }))
 
 const MATERIAL_OPTIONS = [
-  { value: 'XPC',      label: 'XPC',      icon: '🟫' },
-  { value: 'FR-1',     label: 'FR-1',     icon: '🟩' },
-  { value: 'FR-4',     label: 'FR-4',     icon: '🟩' },
+  { value: 'XPC', label: 'XPC', icon: '🟫' },
+  { value: 'FR-1', label: 'FR-1', icon: '🟩' },
+  { value: 'FR-4', label: 'FR-4', icon: '🟩' },
   { value: 'Aluminum', label: 'Aluminum', icon: '🪨' },
 ]
 
 /* Thickness options keyed by material — matches Pelectro */
 const THICKNESS_BY_MATERIAL = {
-  'XPC':      ['1.0'],
-  'FR-1':     ['0.2', '0.8', '1.0', '1.6'],
-  'FR-4':     ['1.0', '1.6', '2.0'],
+  'XPC': ['1.0'],
+  'FR-1': ['0.2', '0.8', '1.0', '1.6'],
+  'FR-4': ['1.0', '1.6', '2.0'],
   'Aluminum': ['1.0', '1.5'],
 }
 
@@ -61,11 +61,11 @@ const MICRO_OPTIONS = [
 ]
 
 const SOLDER_MASK_OPTIONS = [
-  { value: 'Green',  label: 'Green',  color: '#16a34a' },
-  { value: 'Red',    label: 'Red',    color: '#dc2626' },
-  { value: 'Blue',   label: 'Blue',   color: '#2563eb' },
-  { value: 'White',  label: 'White',  color: '#ffffff' },
-  { value: 'Black',  label: 'Black',  color: '#111111' },
+  { value: 'Green', label: 'Green', color: '#16a34a' },
+  { value: 'Red', label: 'Red', color: '#dc2626' },
+  { value: 'Blue', label: 'Blue', color: '#2563eb' },
+  { value: 'White', label: 'White', color: '#ffffff' },
+  { value: 'Black', label: 'Black', color: '#111111' },
   { value: 'Yellow', label: 'Yellow', color: '#eab308' },
 ]
 
@@ -75,18 +75,18 @@ const SILKSCREEN_OPTIONS = [
 ]
 
 const SURFACE_FINISH_OPTIONS = [
-  { value: 'None',    label: 'No surface Finish' },
+  { value: 'None', label: 'No surface Finish' },
   { value: 'Lacquer', label: 'Lacquer' },
   { value: 'Tinning', label: 'Tinning' },
 ]
 
 const BOARD_TYPE_OPTIONS = [
-  { value: 'single',           label: 'Single pieces' },
-  { value: 'panel_customer',   label: 'Panel by Customer' },
-  { value: 'panel_pelectro',   label: 'Panel by Pelectro' },
+  { value: 'single', label: 'Single pieces' },
+  { value: 'panel_customer', label: 'Panel by Customer' },
+  { value: 'panel_pelectro', label: 'Panel by Pelectro' },
 ]
 
-const DESIGN_IN_PANEL_OPTIONS = ['1','2','3','4','5','6'].map(v => ({ value: v, label: v }))
+const DESIGN_IN_PANEL_OPTIONS = ['1', '2', '3', '4', '5', '6'].map(v => ({ value: v, label: v }))
 
 /* ── FormRow helper ─────────────────────────────────────── */
 function FormRow({ label, children }) {
@@ -107,18 +107,18 @@ function FormRow({ label, children }) {
 
 export default function PCBLayoutForm({ parsed, onPricing }) {
   // ── Form state ─────────────────────────────────────────
-  const [boardType,      setBoardType]      = useState('single')
-  const [designInPanel,  setDesignInPanel]  = useState('1')
-  const [length,         setLength]         = useState('')
-  const [width,          setWidth]          = useState('')
-  const [quantity,       setQuantity]       = useState('5')
-  const [layers,         setLayers]         = useState('2')
-  const [material,       setMaterial]       = useState('FR-4')
-  const [thickness,      setThickness]      = useState('1.6')
-  const [micro,          setMicro]          = useState('35 micro')
-  const [solderMask,     setSolderMask]     = useState('Green')
-  const [silkscreen,     setSilkscreen]     = useState('White')
-  const [surfaceFinish,  setSurfaceFinish]  = useState('None')
+  const [boardType, setBoardType] = useState('single')
+  const [designInPanel, setDesignInPanel] = useState('1')
+  const [length, setLength] = useState('')
+  const [width, setWidth] = useState('')
+  const [quantity, setQuantity] = useState('5')
+  const [layers, setLayers] = useState('2')
+  const [material, setMaterial] = useState('FR-4')
+  const [thickness, setThickness] = useState('1.6')
+  const [micro, setMicro] = useState('35 micro')
+  const [solderMask, setSolderMask] = useState('Green')
+  const [silkscreen, setSilkscreen] = useState('White')
+  const [surfaceFinish, setSurfaceFinish] = useState('None')
 
   const [autoFields, setAutoFields] = useState({})
 
@@ -146,7 +146,7 @@ export default function PCBLayoutForm({ parsed, onPricing }) {
       const w = parsed.dimensions.width_mm
       const h = parsed.dimensions.height_mm
       if (w) { setLength(String(Math.round(w * 100) / 100)); auto.length = true }
-      if (h) { setWidth(String(Math.round(h * 100) / 100));  auto.width  = true }
+      if (h) { setWidth(String(Math.round(h * 100) / 100)); auto.width = true }
     }
 
     if (parsed.copper_layer_count) {
@@ -176,13 +176,13 @@ export default function PCBLayoutForm({ parsed, onPricing }) {
     clearTimeout(priceTimer.current)
     priceTimer.current = setTimeout(async () => {
       try {
-        const res = await fetch('/api/price', {
+        const res = await fetch('http://127.0.0.1:8000/api/price', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             length_mm: l,
-            width_mm:  w,
-            quantity:  q,
+            width_mm: w,
+            quantity: q,
             material,
             thickness,
             micro,

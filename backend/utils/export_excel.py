@@ -30,7 +30,7 @@ ARCHITECTURE
 # =============================================================================
 
 # Folder where your Gerber ZIP files are placed
-TEST_FILES_FOLDER = r"backend\test_files"
+TEST_FILES_FOLDER = r"..\test_files"
 
 # ZIP files to parse.
 # ↓ CHANGE THIS to the filename(s) you want to test
@@ -50,7 +50,7 @@ from pathlib import Path
 from datetime import datetime
 
 warnings.filterwarnings("ignore")   # suppress gerbonara UserWarnings from console
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Helper: silences any stdout noise from third-party libs during parsing
 @contextlib.contextmanager
@@ -67,7 +67,7 @@ import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-from backend.gerber_parser import parse_gerber_zip   # <-- the parser service
+from backend.services.parser import parse_gerber_zip   # <-- the parser service
 
 # ── Palette ───────────────────────────────────────────────────────────────────
 C_NAVY  = "1B2A4A"
