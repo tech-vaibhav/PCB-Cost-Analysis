@@ -1,22 +1,33 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { getOptions, getQuote } from '../../api/quote'
-import { DEFAULT_OPTIONS, DEFAULT_QUOTE, snapToOption, toQuoteBody } from './defaults'
+import { initialQuote, snapToOption, toQuoteBody } from './defaults'
+
+const UNREACHABLE = 'Pricing service is unreachable. Please try again shortly.'
+
+export function useOptions(onLoad) {
+  const [options, setOptions] = useState(null)
+  const [error, setError] = useState(null)
+  const load = useCallback(() => {
+    setError(null)
+    getOptions()
+      .then((o) => { setOptions(o); onLoad(initialQuote(o)) })
+      .catch((e) => setError(e.status ? e.message : UNREACHABLE))
+  }, [onLoad])
+  useEffect(load, [load])
+  return { options, error, retry: load }
+}
 
 export default function useQuote() {
-  const [values, setValues] = useState(DEFAULT_QUOTE)
-  const [options, setOptions] = useState(DEFAULT_OPTIONS)
+  const [values, setValues] = useState(null)
+  const { options, error: optionsError, retry } = useOptions(setValues)
   const [autoFields, setAutoFields] = useState({})
   const [quote, setQuote] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    getOptions().then((o) => setOptions({ ...DEFAULT_OPTIONS, ...o })).catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    const body = toQuoteBody(values)
-    if (!(body.boardW > 0 && body.boardL > 0 && body.quantity > 0)) {
+    const body = values && toQuoteBody(values)
+    if (!(body?.boardW > 0 && body.boardL > 0 && body.quantity > 0)) {
       setQuote(null)
       setError(null)
       setLoading(false)
@@ -27,7 +38,7 @@ export default function useQuote() {
       setLoading(true)
       getQuote(body)
         .then((q) => { if (live) { setQuote(q); setError(null) } })
-        .catch((e) => { if (live) { setQuote(null); setError(e.status ? e.message : 'Pricing service is unreachable. Please try again shortly.') } })
+        .catch((e) => { if (live) { setQuote(null); setError(e.status ? e.message : UNREACHABLE) } })
         .finally(() => { if (live) setLoading(false) })
     }, 400)
     return () => { live = false; clearTimeout(t) }
@@ -39,6 +50,7 @@ export default function useQuote() {
   }
 
   const applyGerber = (parsed) => {
+    if (!options) return
     const next = {}
     const { width_mm, height_mm } = parsed.dimensions ?? {}
     if (width_mm > 0 && height_mm > 0) Object.assign(next, { boardW: width_mm.toFixed(2), boardL: height_mm.toFixed(2) })
@@ -48,7 +60,7 @@ export default function useQuote() {
     setAutoFields(Object.fromEntries(Object.keys(next).map((k) => [k, true])))
   }
 
-  const reset = () => { setValues(DEFAULT_QUOTE); setAutoFields({}) }
+  const reset = () => { if (options) setValues(initialQuote(options)); setAutoFields({}) }
 
-  return { values, setValue, options, quote, loading, error, autoFields, applyGerber, reset }
+  return { values, setValue, options, optionsError, retry, quote, loading, error, autoFields, applyGerber, reset }
 }

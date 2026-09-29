@@ -2,13 +2,18 @@
 
 Base URL from `VITE_API_URL` (default http://127.0.0.1:8000). Errors: `{ "detail": "message" }` with 4xx/5xx.
 
+Pricing lives only in Supabase; there are no built-in defaults. Any endpoint that needs the pricing config returns 503 `{ "detail": "Pricing config is not available" }` when it cannot be loaded (tables missing, no `pricing_policy` row, bad data, network).
+
 ## Public
+
+### GET /api/health
+`{ "ok": true, "pricing": "ok" | "unavailable" }`
 
 ### POST /api/gerber/parse (multipart, field `file`, .zip only, max 50 MB)
 Returns ParsedGerberResult (see backend/models/gerber.py). Frontend uses: dimensions.width_mm, dimensions.height_mm, copper_layer_count, drill.min_drill_mm, layers[], layer_count, warnings[].
 
 ### GET /api/pricing/options
-Option lists for the quote form, derived from admin lookups.
+Option lists for the quote form, derived from admin lookups (`orderType` is the `order_types` table in `sort_order`).
 ```json
 {
   "orderType": ["Bare PCB","PCBA","Assembly Only"],
@@ -29,7 +34,7 @@ Option lists for the quote form, derived from admin lookups.
 ```
 
 ### POST /api/quote
-Request (all strings except numbers and specials):
+Request (all strings except numbers and specials; `specials` keys must be in the specials option list, missing keys mean false):
 ```json
 {
   "boardW": 130, "boardL": 80, "quantity": 275,
@@ -52,19 +57,16 @@ Response (customer safe, no cost or competitor data):
 ```
 Invalid option values return 422 with `detail` naming the field.
 
-## Admin (Authorization: Bearer <supabase access_token>; 401 if missing/invalid, 403 if not admin)
+## Admin (Authorization: Bearer <token from /api/auth/signin>; 401 if missing, invalid, expired, or the user is not approved or no longer exists)
 
 ### GET /api/admin/pricing
 ```json
-{ "rates": {...}, "lookups": {...}, "constants": {...}, "updatedAt": "2026-09-30T10:00:00Z" | null, "source": "supabase" | "defaults" }
+{ "rates": {...}, "lookups": {...}, "constants": {...}, "updatedAt": "2026-09-30T10:00:00Z" }
 ```
-Shapes and keys exactly as docs/pricing-model.md. Lookup maps are `{ "option": number }`; `autoMarkup` is `[[qtyCeiling, fraction], ...]`; `deliveryText` values are strings; `materialOptions` and `silkscreenOptions` are string arrays.
+Shapes and keys exactly as docs/pricing-model.md. Lookup maps are `{ "option": number }`; `autoMarkup` is `[[qtyCeiling, fraction], ...]`; `deliveryText` values are strings; `materialOptions` and `silkscreenOptions` are string arrays; `orderTypes` is `{ "Bare PCB": false, "PCBA": true, ... }` (value = includes assembly, key order = sort order); `competitors` is `[{ "name": "JLCPCB", "model": "usd_import" | "inr_domestic", "note": "China + DHL + duty", "isBareSource": true, "params": { "min_qty_cap": 5, ... } }, ...]` in sort order.
 
 ### PUT /api/admin/pricing
-Body: `{ "rates": {...}, "lookups": {...}, "constants": {...} }` (full replace). Validated by pydantic; returns same shape as GET.
-
-### POST /api/admin/pricing/reset
-Restores built-in defaults into Supabase. Returns same shape as GET.
+Body: `{ "rates": {...}, "lookups": {...}, "constants": {...} }` (full replace, every field required). Validated by pydantic; returns same shape as GET. Rate rows keep their `group_name` and `unit` from the database; rate keys the config does not know are left untouched.
 
 ### POST /api/admin/quote
 Body: same as /api/quote plus optional `"overrides": { "rates": {...partial}, "constants": {...partial} }` for what-if analysis.
@@ -74,7 +76,7 @@ Response: everything from /api/quote plus:
   "costPerBoard": 66.46, "orderCost": 18276, "listPerBoard": 73.11, "pricingMode": "auto-beat" | "markup", "markupPct": 10,
   "produced": 275, "costHeads": [ { "item": "Bare PCB (JLCPCB)", "amount": 62.1, "sharePct": 93.4 }, ... ],
   "profit": { "perBoard": 6.65, "total": 1829, "marginPct": 9.1 },
-  "competitors": [ { "name": "JLCPCB", "bare": 62.1, "landed": 76.96, "total": 24973, "note": "China + DHL + 10% duty" }, ... ],
+  "competitors": [ { "name": "JLCPCB", "bare": 62.1, "landed": 76.96, "total": 24973, "note": "China + DHL + duty" }, ... ],
   "cheapest": { "name": "JLCPCB", "landed": 76.96 },
   "savings": { "perBoard": 3.85, "pct": 5.0 },
   "breakEvenBoards": 1234 | null,
@@ -82,8 +84,46 @@ Response: everything from /api/quote plus:
 }
 ```
 
-## Auth
-Frontend signs in with supabase-js (email + password) and sends `session.access_token`. Backend verifies the JWT against `SUPABASE_JWKS_URL` (audience `authenticated`) and checks the email is in `ADMIN_EMAILS`.
+## Auth (no token needed except /me)
+Backend issues its own HS256 JWT (`JWT_SECRET`, valid `JWT_EXPIRES_HOURS`, default 168) with `sub` = admin_users id and `email`. Frontend stores it and sends `Authorization: Bearer <token>`.
 
-## Supabase table
-`pricing_config(key text primary key, value jsonb not null, updated_at timestamptz not null default now())`. Rows: `rates`, `lookups`, `constants`. Backend reads via PostgREST with the secret key. Missing table or rows fall back to defaults and report `source: "defaults"`.
+### POST /api/auth/signup (201)
+Body: `{ "name": "Ann", "phone": "min 5 chars", "email": "a@x.com", "password": "min 8 chars", "note": "optional" }`. Email is lowercased. Creates a pending account and returns `{ "status": "pending" }`. 409 `"An account with this email already exists"`, 422 on bad input.
+
+### POST /api/auth/signin
+Body: `{ "email": "a@x.com", "password": "..." }`. Returns `{ "token": "jwt", "user": { "id": "uuid", "name": "Ann", "email": "a@x.com" } }`. 401 `"Invalid email or password"`; 403 with detail `"pending"` when the account is not approved yet.
+
+### GET /api/auth/me
+Returns `{ "id", "name", "email", "phone", "status": "approved" }`; 401 as for admin routes.
+
+## Team (admin)
+
+### GET /api/admin/users
+All accounts, pending first, then by `createdAt`.
+```json
+{ "users": [ { "id": "uuid", "name": "Ann", "phone": "98765 43210", "email": "a@x.com", "note": "..." | null, "status": "pending" | "approved", "createdAt": "2026-09-30T10:00:00Z", "lastSignInAt": "..." | null, "isYou": true } ] }
+```
+
+### POST /api/admin/users/{id}/approve
+Sets status to approved. Returns one user object as above; 404 if missing.
+
+### DELETE /api/admin/users/{id} (204)
+Deletes the account (also rejects a pending signup). 403 `"You cannot remove yourself"` when `id` is the caller.
+
+Supabase errors on any endpoint that needs the database return 502.
+
+## Supabase tables
+Schema changes after the first setup ship as files in `supabase/migrations`. Tables generated by `backend/scripts/make_schema.py` into `supabase/schema.sql`, data in `supabase/seed.sql` (dumped from the live database by `backend/scripts/dump_seed.py`); every table has `updated_at` and RLS with no policies (secret key only).
+- `pricing_rates(key, group_name, unit, value)`: every numeric rate and constant, one row each.
+- `pricing_policy(id = 1, fab_source, beat_competitor, markup_override_pct)`: single row; its `updated_at` is the config's last saved time.
+- `option_factors(category, option, value, sort_order)`: layer, thickness, copper, finish, trace, hole, mask, testing and IPC factors.
+- `delivery_speeds(speed, price_factor, delivery_text, sort_order)`.
+- `special_requirements(key, surcharge_pct, eng_fee_inr, sort_order)`.
+- `markup_tiers(max_qty, markup_pct)`: auto markup ladder in percent.
+- `form_options(category, option, sort_order)`: material and silkscreen choices.
+- `order_types(option, is_assembly, sort_order)`: quote order types; `is_assembly` switches on BOM, assembly packaging and competitor assembly cost.
+- `competitors(name, model, note, is_bare_source, sort_order)`: `model` picks the formula (`usd_import` or `inr_domestic`); the cheapest `is_bare_source` row is the outsourced bare board.
+- `competitor_params(competitor, param, value)`: named numbers for each competitor's formula (see docs/pricing-model.md); cascades on competitor delete.
+- `admin_users(id, name, phone, email, password_hash, note, status, created_at, last_sign_in_at)`: panel logins; argon2 hashes, status `pending` or `approved`. Created with `if not exists`, so re-running the schema keeps it.
+
+Backend reads via PostgREST (cached 60 s). Missing tables or no `pricing_policy` row mean 503, never a fallback.

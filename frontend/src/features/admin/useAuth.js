@@ -1,24 +1,34 @@
-import { useEffect, useState } from 'react'
-import { supabase } from '../../lib/supabase'
+import { useCallback, useEffect, useState } from 'react'
+import { me, signin } from '../../api/auth'
 
-const signIn = async (email, password) => {
-  const { error } = await supabase.auth.signInWithPassword({ email, password })
-  if (error) throw error
-}
-const signOut = () => supabase.auth.signOut()
+const KEY = 'pcb_admin_token'
 
 export default function useAuth() {
-  const [session, setSession] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [token, setToken] = useState(() => localStorage.getItem(KEY))
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(() => Boolean(localStorage.getItem(KEY)))
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
-      setLoading(false)
-    })
-    const { data } = supabase.auth.onAuthStateChange((_event, s) => setSession(s))
-    return () => data.subscription.unsubscribe()
+  const signOut = useCallback(() => {
+    localStorage.removeItem(KEY)
+    setToken(null)
+    setUser(null)
   }, [])
 
-  return { session, user: session?.user ?? null, token: session?.access_token, loading, signIn, signOut }
+  const signIn = useCallback(async (email, password) => {
+    const r = await signin({ email, password }).catch((e) => {
+      if (e.status === 403 && e.detail === 'pending') e.code = 'pending'
+      throw e
+    })
+    localStorage.setItem(KEY, r.token)
+    setToken(r.token)
+    setUser(r.user)
+  }, [])
+
+  useEffect(() => {
+    const t = localStorage.getItem(KEY)
+    if (!t) return
+    me(t).then(setUser, (e) => e.status === 401 && signOut()).finally(() => setLoading(false))
+  }, [signOut])
+
+  return { user, token, loading, signIn, signOut }
 }

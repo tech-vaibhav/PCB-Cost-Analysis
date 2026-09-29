@@ -1,5 +1,5 @@
 import { FileCheck2 } from 'lucide-react'
-import { Badge, Card, Field, Input, Select, ToggleGroup } from '../../components/ui'
+import { Badge, Button, Card, Field, Input, Select, Spinner, ToggleGroup } from '../../components/ui'
 
 const SWATCH = { Green: '#1f7a45', Blue: '#1d4ed8', Red: '#b91c1c', Black: '#1e293b', White: '#f8fafc', Yellow: '#eab308', Purple: '#7e22ce' }
 const SPECIALS = {
@@ -12,7 +12,9 @@ const SPECIALS = {
   halogenFree: 'Halogen free',
 }
 
-export default function QuoteForm({ values, onChange, options, autoFields = {} }) {
+export default function QuoteForm({ values, onChange, options, error, onRetry, autoFields = {} }) {
+  if (error) return <Card title="Could not load quote options" description={error}><Button variant="secondary" onClick={onRetry}>Retry</Button></Card>
+  if (!options || !values) return <div className="grid place-items-center py-24"><Spinner /></div>
   const field = (key, label, control, isToggle) => (
     <Field
       key={key}
@@ -65,7 +67,7 @@ export default function QuoteForm({ values, onChange, options, autoFields = {} }
         <div className="sm:col-span-2">
           {field('maskColor', 'Solder mask', (
             <ToggleGroup size="sm" value={values.maskColor} onChange={setMask}
-              options={options.maskColor.map((c) => ({ value: c, label: c, color: SWATCH[c] }))} />
+              options={options.maskColor.map((c) => ({ value: c, label: c, color: SWATCH[c] ?? '#94a3b8' }))} />
           ), true)}
         </div>
         <div className="sm:col-span-2">{toggle('silkscreen', 'Silkscreen')}</div>

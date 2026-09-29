@@ -1,35 +1,31 @@
 from backend.models.pricing import PricingConfig
 
 
+def usd_import(p, o, h, lf, asm, bom, usd, duty, landed):
+    base = max(p["per_board_fixed_usd"] / min(o, p["min_qty_cap"]), p["per_board_floor_usd"]) + h * p["area_rate_usd_per_m2"] * lf
+    fee = p["order_fee_usd"] + min(o * p["order_fee_per_board_usd"], p["order_fee_cap_usd"])
+    a = max(p["asm_floor_usd"], p["asm_base_usd"] + h * p["asm_area_rate_usd_per_m2"]) if asm else 0
+    kt = (base + a) * o
+    return ((base * o + fee) * usd * (1 + p["freight_pct"] / 100) / o,
+            ((kt + fee) * usd + kt * usd * duty + bom * o) / o * landed)
+
+
+def inr_domestic(p, o, h, lf, asm, bom, usd, duty, landed):
+    lfx = lf + (p["multilayer_extra"] if lf > 1 else 0)
+    fixed = max(p["per_board_fixed_inr"] / min(o, p["min_qty_cap"]), p["per_board_floor_inr"]) * (lfx if p["fixed_scales_with_layers"] else 1)
+    fee = p["order_fee_inr"] + min(o * p["order_fee_per_board_inr"], p["order_fee_cap_inr"])
+    a = max(p["asm_floor_inr"], p["asm_base_inr"] + h * p["asm_area_rate_inr_per_m2"]) if asm else 0
+    return (fixed + h * p["area_rate_inr_per_m2"] * lfx + fee / o,
+            ((fixed + h * p["area_rate_landed_inr_per_m2"] * lfx + a) * o + fee + bom * o) / o * landed)
+
+
+MODELS = {"usd_import": usd_import, "inr_domestic": inr_domestic}
+
+
 def competitors(o: int, h: float, lf: float, asm: bool, bom: float, cfg: PricingConfig) -> list[dict]:
-    c = cfg.constants
-    usd, landed, duty = c.usdInr, c.landedFactor, c.importDutyPct / 100
-
-    za = max(2 / min(o, 5), 0.08) + h * 12 * lf
-    bt = 18 + min(o * 0.03, 15)
-    ft = za * 1.5
-    st = 22 + min(o * 0.04, 18)
-    yt = max(0.48, 0.15 + h * 80) if asm else 0
-    kt = (za + yt) * o
-    tt = (ft + yt * 1.3) * o
-    jlc_landed = ((kt + bt) * usd + kt * usd * duty + bom * o) / o * landed
-    pcbway_landed = ((tt + st) * usd + tt * usd * duty + bom * o) / o * landed
-
-    jpc_fixed = 200 + min(o * 2, 500)
-    jpc_bare = ((max(80 / min(o, 10), 12) + h * 7000 * lf) * o + jpc_fixed) / o
-    kn = max(80 / min(o, 10), 12) + h * 8500 * lf
-    mn = max(15, 5 + h * 5000) if asm else 0
-    jpc_landed = ((kn + mn) * o + jpc_fixed + bom * o) / o * landed
-
-    mega = (max(50 / min(o, 10), 8) + h * 5000) * (lf + (0.8 if lf > 1 else 0))
-    xn = max(12, 4 + h * 4000) if asm else 0
-    wt = 150 + min(o * 1.5, 400)
-    mega_landed = ((mega + xn) * o + wt + bom * o) / o * landed
-
-    china = f"China + DHL + {c.importDutyPct:g}% duty"
-    return [
-        {"name": "JLCPCB", "bare": (za * o + bt) * usd * 1.1 / o, "landed": jlc_landed, "note": china},
-        {"name": "PCBWay", "bare": (ft * o + st) * usd * 1.1 / o, "landed": pcbway_landed, "note": china},
-        {"name": "JPCPCB", "bare": jpc_bare, "landed": jpc_landed, "note": "India domestic"},
-        {"name": "Megabyte", "bare": mega + wt / o, "landed": mega_landed, "note": "India domestic"},
-    ]
+    k = cfg.constants
+    out = []
+    for c in cfg.lookups.competitors:
+        bare, landed = MODELS[c.model](c.params, o, h, lf, asm, bom, k.usdInr, k.importDutyPct / 100, k.landedFactor)
+        out.append({"name": c.name, "bare": bare, "landed": landed, "note": c.note, "isBareSource": c.isBareSource})
+    return out

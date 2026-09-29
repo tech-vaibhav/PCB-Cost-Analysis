@@ -8,12 +8,13 @@ warnings.filterwarnings("ignore")  # gerbonara is noisy
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.core.settings import settings
-from backend.routers import admin, gerber, pricing
-from backend.services.pricing.store import load_config
+from backend.core.supabase import SupabaseError
+from backend.routers import admin, auth, gerber, pricing
+from backend.services.pricing.store import ConfigUnavailable, load_config
 
 app = FastAPI(title="PCB Quote API")
 app.add_middleware(
@@ -22,13 +23,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-for r in (gerber, pricing, admin):
+for r in (gerber, pricing, auth, admin):
     app.include_router(r.router)
+
+
+@app.exception_handler(SupabaseError)
+def supabase_error(_, exc: SupabaseError):
+    return JSONResponse({"detail": str(exc)}, status_code=502)
+
+
+@app.exception_handler(ConfigUnavailable)
+def config_unavailable(_, exc):
+    return JSONResponse({"detail": f"Pricing config is not available: {exc}"[:300]}, status_code=503)
 
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "configSource": load_config()[1]}
+    try:
+        load_config()
+        return {"ok": True, "pricing": "ok"}
+    except ConfigUnavailable:
+        return {"ok": True, "pricing": "unavailable"}
 
 
 DIST = PROJECT_ROOT / "frontend" / "dist"

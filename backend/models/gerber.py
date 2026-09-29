@@ -91,7 +91,7 @@ class LayerInfo(BaseModel):
     # Polarity
     has_clear_polarity: bool = Field(
         False,
-        description="True if file contains %LPC*% (clear polarity regions — cutouts in copper)"
+        description="True if file contains %LPC*% (clear polarity regions - cutouts in copper)"
     )
 
 

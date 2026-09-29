@@ -1,8 +1,15 @@
 import { useState } from 'react'
-import { Cpu, LogIn } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { LogIn } from 'lucide-react'
 import { Button, Field, Input } from '../../components/ui'
+import AuthCard, { authLink } from './AuthCard'
+
+const message = (e) =>
+  e.status === 401 ? 'Invalid email or password. If your request was declined, your details have been removed.'
+    : e.status ? e.message : 'Could not reach the server.'
 
 export default function LoginPage({ signIn }) {
+  const navigate = useNavigate()
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
 
@@ -14,27 +21,22 @@ export default function LoginPage({ signIn }) {
     try {
       await signIn(form.get('email'), form.get('password'))
     } catch (err) {
-      setError(err.message)
+      if (err.code === 'pending') return navigate('/admin/pending')
+      setError(message(err))
       setBusy(false)
     }
   }
 
   return (
-    <main className="min-h-dvh grid place-items-center bg-slate-50 px-4">
-      <form onSubmit={submit} className="w-full max-w-sm bg-white rounded-xl border border-slate-200 p-6 sm:p-8 flex flex-col gap-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900"><Cpu className="w-5 h-5 text-emerald-600" />PCB Admin</div>
-        <div>
-          <h1 className="text-lg font-semibold text-slate-900">Sign in</h1>
-          <p className="text-sm text-slate-500">Manage pricing rates and lookups.</p>
-        </div>
-        <Field label="Email" htmlFor="email">
-          <Input id="email" name="email" type="email" autoComplete="email" required autoFocus />
-        </Field>
-        <Field label="Password" htmlFor="password" error={error}>
-          <Input id="password" name="password" type="password" autoComplete="current-password" required />
-        </Field>
-        <Button type="submit" icon={LogIn} loading={busy} className="w-full">Sign in</Button>
-      </form>
-    </main>
+    <AuthCard title="Sign in" description="Manage pricing rates and lookups." onSubmit={submit}
+      footer={<>No account? <Link to="/admin/signup" className={authLink}>Request access</Link></>}>
+      <Field label="Email" htmlFor="email">
+        <Input id="email" name="email" type="email" autoComplete="email" required autoFocus />
+      </Field>
+      <Field label="Password" htmlFor="password" error={error}>
+        <Input id="password" name="password" type="password" autoComplete="current-password" required />
+      </Field>
+      <Button type="submit" icon={LogIn} loading={busy} className="w-full">Sign in</Button>
+    </AuthCard>
   )
 }

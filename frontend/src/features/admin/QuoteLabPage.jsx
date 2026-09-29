@@ -1,32 +1,38 @@
 import { useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { AlertCircle, Target, TrendingUp } from 'lucide-react'
-import { Badge, Card, Field, Input, Spinner, Stat, ToggleGroup } from '../../components/ui'
+import { Badge, Card, Field, InfoTip, Input, Spinner, Stat, ToggleGroup } from '../../components/ui'
 import { adminQuote } from '../../api/admin'
-import { getOptions } from '../../api/quote'
-import { DEFAULT_OPTIONS, DEFAULT_QUOTE, toQuoteBody } from '../quote/defaults'
+import { toQuoteBody } from '../quote/defaults'
+import { useOptions } from '../quote/useQuote'
 import QuoteForm from '../quote/QuoteForm'
 import { inr, inrRound, pct } from '../../lib/format'
+import { PAGES } from './nav'
+import PageHeader from './PageHeader'
 
-const LAB_DEFAULT = { ...DEFAULT_QUOTE, boardW: '130', boardL: '80', quantity: '275' }
 const FAB = [{ value: '', label: 'Saved' }, { value: 'outsource', label: 'Outsource' }, { value: 'inhouse', label: 'In-house' }]
 const count = (n) => new Intl.NumberFormat('en-IN').format(Math.round(n))
 const th = 'py-2 pr-3 text-left text-[11px] font-medium uppercase tracking-wide text-slate-400 whitespace-nowrap'
 const td = 'py-2 pr-3 tabular-nums whitespace-nowrap'
+const TIPS = {
+  cost: 'What one board costs you to make and ship, including its share of labour, energy, overheads, scrap and one-time order costs. Price minus this is profit.',
+  landed: 'What the customer would pay per board to import from this supplier, after exchange rate, duty and landed factor. Auto-beat compares against the cheapest one.',
+  'auto-beat': 'Priced just under the cheapest landed competitor because that still covers your cost. Turn off Beat competitor in Quote policy to always use markup.',
+  markup: 'Priced at cost plus markup, because beating the cheapest competitor is off or would drop below cost.',
+}
 
 export default function QuoteLabPage() {
   const { token, signOut } = useOutletContext()
-  const [values, setValues] = useState(LAB_DEFAULT)
-  const [options, setOptions] = useState(DEFAULT_OPTIONS)
+  const [values, setValues] = useState(null)
+  const { options, error: optionsError, retry } = useOptions(setValues)
   const [fab, setFab] = useState('')
   const [markup, setMarkup] = useState('')
   const [quote, setQuote] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  useEffect(() => { getOptions().then((o) => setOptions({ ...DEFAULT_OPTIONS, ...o })).catch(() => {}) }, [])
-
   useEffect(() => {
+    if (!values) return
     const body = toQuoteBody(values)
     if (!(body.boardW > 0 && body.boardL > 0 && body.quantity > 0)) return
     const rates = { ...(fab && { fabSource: fab }), ...(markup !== '' && { markupOverridePct: Number(markup) }) }
@@ -43,7 +49,9 @@ export default function QuoteLabPage() {
   }, [values, fab, markup, token, signOut])
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] items-start">
+    <>
+    <PageHeader page={PAGES.find((p) => p.key === 'lab')} />
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] items-start">
       <div className="flex flex-col gap-4">
         <Card title="What-if overrides" description="Applied to this quote only, never saved">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -53,7 +61,7 @@ export default function QuoteLabPage() {
             </Field>
           </div>
         </Card>
-        <QuoteForm values={values} options={options} onChange={(k, v) => setValues((s) => ({ ...s, [k]: v }))} />
+        <QuoteForm values={values} options={options} error={optionsError} onRetry={retry} onChange={(k, v) => setValues((s) => ({ ...s, [k]: v }))} />
       </div>
 
       <div className="flex flex-col gap-4 xl:sticky xl:top-20">
@@ -67,6 +75,7 @@ export default function QuoteLabPage() {
         )}
       </div>
     </div>
+    </>
   )
 }
 
@@ -78,16 +87,16 @@ function Result({ q }) {
 
   return (
     <>
-      <Card title="Price" action={mode}>
+      <Card title="Price" action={<div className="flex items-center gap-1.5">{mode}<InfoTip align="right" title={q.pricingMode === 'auto-beat' ? 'Auto-beat' : 'Markup'} text={TIPS[q.pricingMode] ?? TIPS.markup} /></div>}>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <Stat hero label="Your price" value={inr(q.pricePerBoard)} detail={`List ${inr(q.listPerBoard)}`} />
-          <Stat label="Cost" value={inr(q.costPerBoard)} detail="per board" />
+          <Stat label={<span className="inline-flex items-center gap-1">Cost<span className="normal-case tracking-normal font-normal"><InfoTip title="Cost per board" text={TIPS.cost} align="right" /></span></span>} value={inr(q.costPerBoard)} detail="per board" />
           <Stat label="Profit" value={inr(q.profit.perBoard)} detail={`${pct(q.profit.marginPct)} margin`} tone={q.profit.perBoard >= 0 ? 'good' : 'bad'} />
           <Stat label="Total incl GST" value={inrRound(q.total)} detail={`${q.quantity} boards`} />
         </div>
       </Card>
 
-      <Card title="Competitors" description="Per board, landed in India">
+      <Card title="Competitors" description={<span className="inline-flex items-center gap-1"><InfoTip title="Landed price" text={TIPS.landed} />Per board, landed in India</span>}>
         <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
           <table className="w-full text-sm">
             <thead className="border-b border-slate-100"><tr>{['Supplier', 'Bare', 'Landed', 'Total incl GST', 'vs us'].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>

@@ -3,12 +3,12 @@
 Ported from the Pelectro PCB Calculator. All money in INR. Per board unless stated.
 
 ## Quote inputs (customer)
-- orderType: Bare PCB | PCBA | Assembly Only. isAssembly = orderType != Bare PCB
+- orderType: a key of lookups.orderTypes (Bare PCB | PCBA | Assembly Only). isAssembly = orderTypes[orderType]
 - boardW, boardL (mm), quantity (min 1), layers: 1|2|4|6|8
 - thickness: 0.6|0.8|1.0|1.2|1.6|2.0|2.4|3.2, copper oz: 0.5|1|1.5|2|3|4
 - material: FR4 TG130|FR4 TG150|FR4 TG170|High-Freq|Aluminum (display only, not priced)
 - maskColor, silkscreen (silkscreen display only), finish, traceSpace, minHole, ipcStd, testing, express
-- specials (yes/no): impedance, blindVias, goldFingers, halfHole, resinPlug, metalEdge, halogenFree
+- specials ({key: bool}, keys from specialPct, missing = no): impedance, blindVias, goldFingers, halfHole, resinPlug, metalEdge, halogenFree
 
 ## Admin config
 
@@ -20,7 +20,8 @@ tooling 15000, opsPerShift 1, opSalary 18000, qcSalary 0, supervisorSalary 0, be
 loadKw 15, runHours 8, utilPct 60, tariff 8.5, lighting 5000, nitrogen 2000, waterEffluent 2000,
 rent 15000, admin 10000, marketing 5000, software 3000, maintenance 3000, insurance 2000, interest 5000, misc 3000, depreciation 8000,
 esdBag 2.5, cartonPacking 1.5, shipping 5, bankChargesPct 0.5, warrantyPct 1, compliance 500,
-ohAllocPct 15, markupOverridePct 10 (null = auto ladder), beatCompetitor true, fabSource "outsource" | "inhouse"
+ohAllocPct 15, markupBeyondTiersPct 30 (markup above the last tier), bareConsumablesSharePct 40, barePackagingSharePct 50,
+outsourceLabourSharePct 60, outsourceEnergySharePct 50, markupOverridePct 10 (null = auto ladder), beatCompetitor true, fabSource "outsource" | "inhouse"
 
 ### lookups (option -> value)
 - layerFactor: {1:0.7, 2:1, 4:1.8, 6:2.6, 8:3.4}
@@ -36,9 +37,15 @@ ohAllocPct 15, markupOverridePct 10 (null = auto ladder), beatCompetitor true, f
 - ipcFactor: {IPC-2:1, IPC-3:1.15}
 - specialPct: {impedance:12, blindVias:25, goldFingers:10, halfHole:8, resinPlug:10, metalEdge:15, halogenFree:8}
 - specialEngFee: {impedance:1000, blindVias:2000, goldFingers:500, halfHole:500, resinPlug:500, metalEdge:500, halogenFree:500}
-- autoMarkup (qty ceiling -> markup fraction, ordered): [[5,1.0],[10,0.9],[20,0.8],[50,0.72],[100,0.65],[300,0.58],[500,0.5],[1000,0.42],[2000,0.35]] then 0.3
+- autoMarkup (qty ceiling -> markup fraction, ordered): [[5,1.0],[10,0.9],[20,0.8],[50,0.72],[100,0.65],[300,0.58],[500,0.5],[1000,0.42],[2000,0.35]] then markupBeyondTiersPct/100
 - materialOptions: [FR4 TG130, FR4 TG150, FR4 TG170, High-Freq, Aluminum]
 - silkscreenOptions: [White, Black, Yellow, None]
+- orderTypes (option -> isAssembly, ordered): {Bare PCB:false, PCBA:true, Assembly Only:true}
+- competitors (ordered): name, model (usd_import | inr_domestic), note, isBareSource, params
+  - JLCPCB usd_import bare source: min_qty_cap 5, per_board_fixed_usd 2, per_board_floor_usd 0.08, area_rate_usd_per_m2 12, order_fee_usd 18, order_fee_per_board_usd 0.03, order_fee_cap_usd 15, freight_pct 10, asm_floor_usd 0.48, asm_base_usd 0.15, asm_area_rate_usd_per_m2 80
+  - PCBWay usd_import bare source: min_qty_cap 5, per_board_fixed_usd 3, per_board_floor_usd 0.12, area_rate_usd_per_m2 18, order_fee_usd 22, order_fee_per_board_usd 0.04, order_fee_cap_usd 18, freight_pct 10, asm_floor_usd 0.624, asm_base_usd 0.195, asm_area_rate_usd_per_m2 104
+  - JPCPCB inr_domestic bare source: min_qty_cap 10, per_board_fixed_inr 80, per_board_floor_inr 12, area_rate_inr_per_m2 7000, area_rate_landed_inr_per_m2 8500, multilayer_extra 0, fixed_scales_with_layers 0, order_fee_inr 200, order_fee_per_board_inr 2, order_fee_cap_inr 500, asm_floor_inr 15, asm_base_inr 5, asm_area_rate_inr_per_m2 5000
+  - Megabyte inr_domestic: min_qty_cap 10, per_board_fixed_inr 50, per_board_floor_inr 8, area_rate_inr_per_m2 5000, area_rate_landed_inr_per_m2 5000, multilayer_extra 0.8, fixed_scales_with_layers 1, order_fee_inr 150, order_fee_per_board_inr 1.5, order_fee_cap_inr 400, asm_floor_inr 12, asm_base_inr 4, asm_area_rate_inr_per_m2 4000
 
 ### constants
 usdInr 88, gstPct 18, landedFactor 1.3, importDutyPct 10, baseEngFee 1000, extraLayerFee 500, beatCompetitorPct 5, camHoursPerMonth 160
@@ -63,18 +70,26 @@ Cost heads
 - laminate V = u ? 0 : Q*lamRate*lf*tf*cf
 - process P_ = u ? 0 : Q*procRate*lf*(1+fin/100)*trf*ipc
 - bomCost F = S ? bom*(1+compWastagePct/100)*(1+compFreightPct/100) : 0
-- consumables Fa = (solderPaste + consumables + (u?0:drillRouterWear) + (u?0:maskColorRs)) * (S ? 1 : 0.4)
+- consumables Fa = (solderPaste + consumables + (u?0:drillRouterWear) + (u?0:maskColorRs)) * (S ? 1 : bareConsumablesSharePct/100)
 - special wa = u ? 0 : (V+P_)*A/100
 - drilling Cn = u ? 0 : minHoleRs
 - testing W = testingRs
 
-Competitor bare board (INR/board), usd=usdInr
-- jlcBase za = max(2/min(o,5), 0.08) + h*12*lf ; jlcFixed Bt = 18 + min(o*0.03, 15)
-- jlcBare Le = (za*o + Bt)*usd*1.1/o
-- pcbwayBase ft = za*1.5 ; pcbwayFixed St = 22 + min(o*0.04, 18)
-- pcbwayBare Ie = (ft*o + St)*usd*1.1/o
-- jpcBare Ne = ((max(80/min(o,10),12) + h*7000*lf)*o + (200 + min(o*2,500)))/o
-- outsourcedBare Na = u ? min(Le, Ie, Ne) : 0 ; outsourcedFrom = name of the min
+Competitors (INR/board), p = that competitor's params, usd=usdInr, duty=importDutyPct/100, landed=landedFactor
+- usd_import:
+  base = max(per_board_fixed_usd/min(o,min_qty_cap), per_board_floor_usd) + h*area_rate_usd_per_m2*lf
+  fee = order_fee_usd + min(o*order_fee_per_board_usd, order_fee_cap_usd)
+  asm = S ? max(asm_floor_usd, asm_base_usd + h*asm_area_rate_usd_per_m2) : 0
+  bare = (base*o + fee)*usd*(1 + freight_pct/100)/o
+  kt = (base+asm)*o ; landedPrice = ((kt+fee)*usd + kt*usd*duty + F*o)/o*landed
+- inr_domestic:
+  lfx = lf + (lf>1 ? multilayer_extra : 0)
+  fixed = max(per_board_fixed_inr/min(o,min_qty_cap), per_board_floor_inr) * (fixed_scales_with_layers ? lfx : 1)
+  fee = order_fee_inr + min(o*order_fee_per_board_inr, order_fee_cap_inr)
+  bare = fixed + h*area_rate_inr_per_m2*lfx + fee/o
+  asm = S ? max(asm_floor_inr, asm_base_inr + h*asm_area_rate_inr_per_m2) : 0
+  landedPrice = ((fixed + h*area_rate_landed_inr_per_m2*lfx + asm)*o + fee + F*o)/o*landed
+- outsourcedBare Na = u ? min bare over competitors with isBareSource : 0 ; outsourcedFrom = name of the min
 
 Material per board K = y ? Na : V + P_ + Na + F + Fa + wa + Cn + W
 
@@ -85,19 +100,19 @@ Labour (monthly)
 - ops = opsPerShift*shifts ; opCost = ops*opSalary ; qc = qcSalary*shifts ; sup = supervisorSalary*shifts
 - base q = opCost+qc+sup ; benefits = q*benefitsPct/100 ; labourMonth Z = q+benefits
 - Oa = ohAllocPct/100
-- labour ee = y ? 0 : (g>0 ? Z*Oa/g*(1+reworkPct/100)*(u?0.6:1) : 0)
+- labour ee = y ? 0 : (g>0 ? Z*Oa/g*(1+reworkPct/100)*(u?outsourceLabourSharePct/100:1) : 0)
 - camHourly = supervisorSalary/camHoursPerMonth ; camOrder ae = camTimeHrs*camHourly
 
 Energy (monthly)
 - runHrs Da = workDays*shifts*runHours ; kwh ye = loadKw*Da*utilPct/100 ; power Ya = ye*tariff
 - energyMonth ke = Ya + lighting + nitrogen + waterEffluent
-- energy te = y ? 0 : (g>0 ? ke*Oa/g*(u?0.5:1) : 0)
+- energy te = y ? 0 : (g>0 ? ke*Oa/g*(u?outsourceEnergySharePct/100:1) : 0)
 
 Overheads
 - overheadMonth oe = rent+admin+marketing+software+maintenance+insurance+interest+misc+depreciation
 - overhead ne = y ? 0 : (g>0 ? oe*Oa/g : 0)
 
-Packaging w = y ? esdBag*0.5 : (S ? esdBag+cartonPacking+shipping : esdBag*0.5 + shipping*0.5)
+Packaging (ps = barePackagingSharePct/100) w = y ? esdBag*ps : (S ? esdBag+cartonPacking+shipping : (esdBag+shipping)*ps)
 
 Totals
 - baseCost Me = K+ee+te+ne+w
@@ -111,14 +126,7 @@ Price
 - engFee Xa = y ? 0 : baseEngFee + Pe + (lf>1 ? extraLayerFee*(layers/2 - 1) : 0)
 - listPerBoard Fe = (Bn*o + Xa)/o
 
-Competitor landed PCBA (INR/board), landed=landedFactor, duty=importDutyPct/100, usd=usdInr
-- jlcAsm yt = S ? max(0.48, 0.15 + h*80) : 0 ; kt=(za+yt)*o ; Mt=(kt+Bt)*usd + kt*usd*duty + F*o ; jlcLanded Ae = Mt/o*landed
-- pcbwayAsm yn = yt*1.3 ; Tt=(ft+yn)*o ; xt=(Tt+St)*usd + Tt*usd*duty + F*o ; pcbwayLanded Ee = xt/o*landed
-- jpcBase kn = max(80/min(o,10),12) + h*8500*lf ; jpcAsm Mn = S ? max(15, 5+h*5000) : 0 ; jpcFixed Tn = 200+min(o*2,500)
-- jpcLanded Ge = ((kn+Mn)*o + Tn + F*o)/o*landed
-- megaBase Ft = (max(50/min(o,10),8) + h*5000)*(lf + (lf>1?0.8:0)) ; megaAsm xn = S ? max(12, 4+h*4000) : 0 ; megaFixed wt = 150+min(o*1.5,400)
-- megaLanded Ua = ((Ft+xn)*o + wt + F*o)/o*landed ; megaBare Ja = Ft + wt/o
-- competitors: JLCPCB(bare Le, landed Ae), PCBWay(Ie, Ee), JPCPCB(Ne, Ge), Megabyte(Ja, Ua)
+Competitor landed: landedPrice per competitor above, in competitors order
 - cheapest C = min landed ; cheapestName
 
 Final

@@ -7,15 +7,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=Path(__file__).parent.parent / ".env", extra="ignore")
 
     supabase_url: str
-    supabase_publishable_key: str
     supabase_secret_key: str
-    supabase_jwks_url: str
-    admin_emails: str = ""
+    jwt_secret: str
+    jwt_expires_hours: int = 168
     cors_origins: str = ""
-
-    @property
-    def admin_email_list(self) -> list[str]:
-        return [e.strip().lower() for e in self.admin_emails.split(",") if e.strip()]
 
     @property
     def cors_origin_list(self) -> list[str]:

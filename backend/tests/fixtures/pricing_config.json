@@ -1,0 +1,300 @@
+{
+  "rates": {
+    "panelW": 250.0,
+    "panelL": 250.0,
+    "routingGap": 5.0,
+    "edgeMargin": 10.0,
+    "yieldPct": 94.0,
+    "workDays": 26.0,
+    "shifts": 1.0,
+    "lamRate": 1600.0,
+    "procRate": 900.0,
+    "bom": 80.0,
+    "solderPaste": 8.0,
+    "consumables": 12.0,
+    "compWastagePct": 2.0,
+    "drillRouterWear": 3.0,
+    "compFreightPct": 3.0,
+    "tooling": 15000.0,
+    "opsPerShift": 1.0,
+    "opSalary": 18000.0,
+    "qcSalary": 0.0,
+    "supervisorSalary": 0.0,
+    "benefitsPct": 18.0,
+    "reworkPct": 5.0,
+    "camTimeHrs": 2.0,
+    "loadKw": 15.0,
+    "runHours": 8.0,
+    "utilPct": 60.0,
+    "tariff": 8.5,
+    "lighting": 5000.0,
+    "nitrogen": 2000.0,
+    "waterEffluent": 2000.0,
+    "rent": 15000.0,
+    "admin": 10000.0,
+    "marketing": 5000.0,
+    "software": 3000.0,
+    "maintenance": 3000.0,
+    "insurance": 2000.0,
+    "interest": 5000.0,
+    "misc": 3000.0,
+    "depreciation": 8000.0,
+    "esdBag": 2.5,
+    "cartonPacking": 1.5,
+    "shipping": 5.0,
+    "bankChargesPct": 0.5,
+    "warrantyPct": 1.0,
+    "compliance": 500.0,
+    "ohAllocPct": 15.0,
+    "markupBeyondTiersPct": 30.0,
+    "bareConsumablesSharePct": 40.0,
+    "barePackagingSharePct": 50.0,
+    "outsourceLabourSharePct": 60.0,
+    "outsourceEnergySharePct": 50.0,
+    "markupOverridePct": 10.0,
+    "beatCompetitor": true,
+    "fabSource": "outsource"
+  },
+  "lookups": {
+    "orderTypes": {
+      "Bare PCB": false,
+      "PCBA": true,
+      "Assembly Only": true
+    },
+    "layerFactor": {
+      "1": 0.7,
+      "2": 1.0,
+      "4": 1.8,
+      "6": 2.6,
+      "8": 3.4
+    },
+    "thicknessFactor": {
+      "0.6": 0.85,
+      "0.8": 0.9,
+      "1.0": 0.95,
+      "1.2": 1.0,
+      "1.6": 1.1,
+      "2.0": 1.25,
+      "2.4": 1.4,
+      "3.2": 1.6
+    },
+    "copperFactor": {
+      "0.5": 0.95,
+      "1": 1.0,
+      "1.5": 1.15,
+      "2": 1.35,
+      "3": 1.7,
+      "4": 2.2
+    },
+    "finishSurchargePct": {
+      "HASL": 0.0,
+      "HASL-LF": 8.0,
+      "ENIG-1": 20.0,
+      "ENIG-2": 28.0,
+      "ENIG-3": 35.0,
+      "ImmTin": 12.0,
+      "ImmSilver": 15.0,
+      "OSP": -5.0
+    },
+    "traceFactor": {
+      "6/6": 1.0,
+      "5/5": 1.1,
+      "4/4": 1.25,
+      "3/3": 1.5
+    },
+    "minHoleRs": {
+      "0.40": 0.0,
+      "0.30": 3.0,
+      "0.25": 8.0,
+      "0.20": 15.0,
+      "0.15": 25.0
+    },
+    "maskColorRs": {
+      "Green": 0.0,
+      "Blue": 2.0,
+      "Red": 2.0,
+      "Black": 3.0,
+      "White": 3.0,
+      "Yellow": 2.0,
+      "Purple": 5.0
+    },
+    "testingRs": {
+      "FlyingProbe": 3.0,
+      "Fixture": 8.0,
+      "None": 0.0
+    },
+    "expressFactor": {
+      "Standard": 1.0,
+      "Urgent": 1.5
+    },
+    "deliveryText": {
+      "Standard": "7-10 working days",
+      "Urgent": "3-5 working days"
+    },
+    "ipcFactor": {
+      "IPC-2": 1.0,
+      "IPC-3": 1.15
+    },
+    "specialPct": {
+      "impedance": 12.0,
+      "blindVias": 25.0,
+      "goldFingers": 10.0,
+      "halfHole": 8.0,
+      "resinPlug": 10.0,
+      "metalEdge": 15.0,
+      "halogenFree": 8.0
+    },
+    "specialEngFee": {
+      "impedance": 1000.0,
+      "blindVias": 2000.0,
+      "goldFingers": 500.0,
+      "halfHole": 500.0,
+      "resinPlug": 500.0,
+      "metalEdge": 500.0,
+      "halogenFree": 500.0
+    },
+    "autoMarkup": [
+      [
+        5,
+        1.0
+      ],
+      [
+        10,
+        0.9
+      ],
+      [
+        20,
+        0.8
+      ],
+      [
+        50,
+        0.72
+      ],
+      [
+        100,
+        0.65
+      ],
+      [
+        300,
+        0.58
+      ],
+      [
+        500,
+        0.5
+      ],
+      [
+        1000,
+        0.42
+      ],
+      [
+        2000,
+        0.35
+      ]
+    ],
+    "materialOptions": [
+      "FR4 TG130",
+      "FR4 TG150",
+      "FR4 TG170",
+      "High-Freq",
+      "Aluminum"
+    ],
+    "silkscreenOptions": [
+      "White",
+      "Black",
+      "Yellow",
+      "None"
+    ],
+    "competitors": [
+      {
+        "name": "JLCPCB",
+        "model": "usd_import",
+        "note": "China + DHL + duty",
+        "isBareSource": true,
+        "params": {
+          "min_qty_cap": 5.0,
+          "per_board_fixed_usd": 2.0,
+          "per_board_floor_usd": 0.08,
+          "area_rate_usd_per_m2": 12.0,
+          "order_fee_usd": 18.0,
+          "order_fee_per_board_usd": 0.03,
+          "order_fee_cap_usd": 15.0,
+          "freight_pct": 10.0,
+          "asm_floor_usd": 0.48,
+          "asm_base_usd": 0.15,
+          "asm_area_rate_usd_per_m2": 80.0
+        }
+      },
+      {
+        "name": "PCBWay",
+        "model": "usd_import",
+        "note": "China + DHL + duty",
+        "isBareSource": true,
+        "params": {
+          "min_qty_cap": 5.0,
+          "per_board_fixed_usd": 3.0,
+          "per_board_floor_usd": 0.12,
+          "area_rate_usd_per_m2": 18.0,
+          "order_fee_usd": 22.0,
+          "order_fee_per_board_usd": 0.04,
+          "order_fee_cap_usd": 18.0,
+          "freight_pct": 10.0,
+          "asm_floor_usd": 0.624,
+          "asm_base_usd": 0.195,
+          "asm_area_rate_usd_per_m2": 104.0
+        }
+      },
+      {
+        "name": "JPCPCB",
+        "model": "inr_domestic",
+        "note": "India domestic",
+        "isBareSource": true,
+        "params": {
+          "min_qty_cap": 10.0,
+          "per_board_fixed_inr": 80.0,
+          "per_board_floor_inr": 12.0,
+          "area_rate_inr_per_m2": 7000.0,
+          "area_rate_landed_inr_per_m2": 8500.0,
+          "multilayer_extra": 0.0,
+          "fixed_scales_with_layers": 0.0,
+          "order_fee_inr": 200.0,
+          "order_fee_per_board_inr": 2.0,
+          "order_fee_cap_inr": 500.0,
+          "asm_floor_inr": 15.0,
+          "asm_base_inr": 5.0,
+          "asm_area_rate_inr_per_m2": 5000.0
+        }
+      },
+      {
+        "name": "Megabyte",
+        "model": "inr_domestic",
+        "note": "India domestic",
+        "isBareSource": false,
+        "params": {
+          "min_qty_cap": 10.0,
+          "per_board_fixed_inr": 50.0,
+          "per_board_floor_inr": 8.0,
+          "area_rate_inr_per_m2": 5000.0,
+          "area_rate_landed_inr_per_m2": 5000.0,
+          "multilayer_extra": 0.8,
+          "fixed_scales_with_layers": 1.0,
+          "order_fee_inr": 150.0,
+          "order_fee_per_board_inr": 1.5,
+          "order_fee_cap_inr": 400.0,
+          "asm_floor_inr": 12.0,
+          "asm_base_inr": 4.0,
+          "asm_area_rate_inr_per_m2": 4000.0
+        }
+      }
+    ]
+  },
+  "constants": {
+    "usdInr": 88.0,
+    "gstPct": 18.0,
+    "landedFactor": 1.3,
+    "importDutyPct": 10.0,
+    "baseEngFee": 1000.0,
+    "extraLayerFee": 500.0,
+    "beatCompetitorPct": 5.0,
+    "camHoursPerMonth": 160.0
+  }
+}

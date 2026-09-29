@@ -10,6 +10,8 @@ from backend.services.pricing.panel import panel
 def validate(req: QuoteRequest, cfg: PricingConfig) -> None:
     for field, allowed in options_from_config(cfg).items():
         if field == "specials":
+            if bad := set(req.specials) - set(allowed):
+                raise ValueError(f"specials: unknown {', '.join(sorted(bad))}")
             continue
         value = getattr(req, field)
         if value not in allowed:
@@ -30,20 +32,19 @@ def calculate_quote(req: QuoteRequest, cfg: PricingConfig) -> AdminQuoteResponse
     r, lk, k = cfg.rates, cfg.lookups, cfg.constants
     o = req.quantity
     pan = panel(req.boardW, req.boardL, r)
-    asm = req.orderType != "Bare PCB"
+    asm = lk.orderTypes[req.orderType]
     comps = competitors(o, pan["boardArea"], lk.layerFactor[req.layers], asm, bom_cost(r, asm), cfg)
-    # outsourced bare board is the cheapest of JLCPCB, PCBWay, JPCPCB (Megabyte excluded)
-    bare = min(comps[:3], key=lambda x: x["bare"])
+    bare = min((x for x in comps if x["isBareSource"]), key=lambda x: x["bare"])
     c = costs(req, cfg, pan["matArea"], bare["bare"])
     y, v, lf = c["y"], c["costPerBoard"], c["lf"]
 
     if r.markupOverridePct is not None:
         markup = r.markupOverridePct / 100
     else:
-        markup = next((m for ceiling, m in lk.autoMarkup if o <= ceiling), 0.3)
+        markup = next((m for ceiling, m in lk.autoMarkup if o <= ceiling), r.markupBeyondTiersPct / 100)
     se = v * (1 + markup) * lk.expressFactor[req.express]
     bank, warranty = se * r.bankChargesPct / 100, se * r.warrantyPct / 100
-    eng_extra = sum(lk.specialEngFee[s] for s, on in req.specials if on)
+    eng_extra = sum(lk.specialEngFee[s] for s, on in req.specials.items() if on)
     eng_fee = 0 if y else k.baseEngFee + eng_extra + (k.extraLayerFee * (float(req.layers) / 2 - 1) if lf > 1 else 0)
     list_price = ((se + bank + warranty) * o + eng_fee) / o
 
@@ -105,7 +106,7 @@ def calculate_quote(req: QuoteRequest, cfg: PricingConfig) -> AdminQuoteResponse
             "IPC class": req.ipcStd,
             "Testing": req.testing,
             "Production": req.express,
-            "Special reqs": ", ".join(s for s, on in req.specials if on) or "None",
+            "Special reqs": ", ".join(s for s, on in req.specials.items() if on) or "None",
             "Delivery": delivery,
         },
         costPerBoard=round(v, 2),

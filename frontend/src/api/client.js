@@ -8,7 +8,7 @@ export class ApiError extends Error {
   }
 }
 
-// Single fetch wrapper. body: plain object (JSON) or FormData. token: Supabase access token for admin routes.
+// Single fetch wrapper. body: plain object (JSON) or FormData. token: admin JWT for admin routes.
 export async function request(path, { method = 'GET', body, token } = {}) {
   const headers = {}
   if (token) headers.Authorization = `Bearer ${token}`

@@ -102,7 +102,7 @@ export default function QuotePage() {
 
         </aside>
 
-        <QuoteForm values={q.values} onChange={q.setValue} options={q.options} autoFields={q.autoFields} />
+        <QuoteForm values={q.values} onChange={q.setValue} options={q.options} error={q.optionsError} onRetry={q.retry} autoFields={q.autoFields} />
       </main>
 
       <PriceBar {...summary} />

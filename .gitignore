@@ -56,3 +56,4 @@ supabase
 
 .claude
 .pytest_cache
+backend/scripts

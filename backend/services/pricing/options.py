@@ -1,12 +1,9 @@
 from backend.models.pricing import PricingConfig
 
-ORDER_TYPES = ["Bare PCB", "PCBA", "Assembly Only"]
-
-
 def options_from_config(cfg: PricingConfig) -> dict:
     lk = cfg.lookups
     return {
-        "orderType": ORDER_TYPES,
+        "orderType": list(lk.orderTypes),
         "layers": list(lk.layerFactor),
         "thickness": list(lk.thicknessFactor),
         "copper": list(lk.copperFactor),

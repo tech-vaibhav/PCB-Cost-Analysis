@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getPricing, putPricing, resetPricing } from '../../api/admin'
+import { getPricing, putPricing } from '../../api/admin'
 
 const SECTIONS = ['rates', 'lookups', 'constants']
 const pick = (d) => structuredClone({ rates: d.rates, lookups: d.lookups, constants: d.constants })
@@ -55,7 +55,7 @@ export default function usePricingConfig(token, onUnauthorized) {
 
   return {
     draft, error, busy, dirty, changes, justSaved,
-    source: server?.source, updatedAt: server?.updatedAt,
+    updatedAt: server?.updatedAt,
     reload: () => run(getPricing),
     setRate: (k, v) => edit((d) => { d.rates[k] = v }),
     setConstant: (k, v) => edit((d) => { d.constants[k] = v }),
@@ -73,13 +73,10 @@ export default function usePricingConfig(token, onUnauthorized) {
       if (Array.isArray(l)) l.splice(opt, 1)
       else delete l[opt]
     }),
+    setCompetitor: (name, field, v) => edit((d) => { d.lookups.competitors.find((c) => c.name === name)[field] = v }),
+    setCompetitorParam: (name, param, v) => edit((d) => { d.lookups.competitors.find((c) => c.name === name).params[param] = v }),
     setAutoMarkupRow: (i, ceiling, fraction) => edit((d) => { d.lookups.autoMarkup[i] = [ceiling, fraction] }),
     discard: () => setDraft(pick(server)),
     save: async () => { if (await run((t) => putPricing(t, draft))) setJustSaved(true) },
-    reset: async () => {
-      if (window.confirm('Restore all built-in default rates? This overwrites the saved config.')) {
-        if (await run(resetPricing)) setJustSaved(true)
-      }
-    },
   }
 }
