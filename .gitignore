@@ -51,3 +51,8 @@ logs/
 .cache/
 tmp/
 temp/
+
+supabase
+
+.claude
+.pytest_cache

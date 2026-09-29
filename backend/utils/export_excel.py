@@ -9,16 +9,16 @@ HOW TO USE
 2. Edit the CONFIG section below:
    - Set ZIP_FILES to the filename(s) you want to test
      Use ["*"] to scan ALL zips in the folder automatically
-3. Run: python export_excel.py
+3. Run from backend/utils: python export_excel.py
 4. Open the generated PCB_Gerber_Report.xlsx
 
 ARCHITECTURE
 ------------
-  backend/gerber_parser.py  <-- parser SERVICE (do not edit)
+  backend/services/gerber/parser.py  <-- parser SERVICE (do not edit)
           |
           | called by
           v
-  export_excel.py           <-- this script (configure & run)
+  backend/utils/export_excel.py  <-- this script (configure & run)
           |
           | writes
           v
@@ -67,9 +67,9 @@ import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-from backend.services.parser import parse_gerber_zip   # <-- the parser service
+from backend.services.gerber.parser import parse_gerber_zip   # <-- the parser service
 
-# ── Palette ───────────────────────────────────────────────────────────────────
+# -- Palette -------------------------------------------------------------------
 C_NAVY  = "1B2A4A"
 C_TEAL  = "0D7C8F"
 C_LIGHT = "E8F4F8"
@@ -110,9 +110,9 @@ def status(result):
 
 def yesno(v): return "YES" if v else "NO"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SHEET 1 — Summary (one row per ZIP)
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# SHEET 1 - Summary (one row per ZIP)
+# -----------------------------------------------------------------------------
 
 COLS = [
     ("Filename",        28), ("Status",    10), ("Width mm",  11),
@@ -140,7 +140,7 @@ def build_summary(wb, parsed):
     ws.row_dimensions[2].height = 46
     ws.merge_cells(f"B2:{get_column_letter(last)}2")
     t = ws["B2"]
-    t.value = "PCB Gerber Parser — Batch Analysis Report"
+    t.value = "PCB Gerber Parser - Batch Analysis Report"
     t.font = bf(18, C_WHITE); t.fill = f(C_NAVY); t.alignment = ctr()
 
     ws.row_dimensions[3].height = 16
@@ -213,9 +213,9 @@ def build_summary(wb, parsed):
     ws.freeze_panes = "C5"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SHEET 2+ — Per-file layer detail
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# SHEET 2+ - Per-file layer detail
+# -----------------------------------------------------------------------------
 
 def safe_name(name):
     for ch in r'\/*?:[].': name = name.replace(ch, "_")
@@ -301,9 +301,9 @@ def build_file_sheet(wb, name, result):
             ws.merge_cells(f"C{r2}:M{r2}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # MAIN
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 
 def main():
     folder = Path(TEST_FILES_FOLDER)
