@@ -30,8 +30,9 @@ from fastapi.staticfiles import StaticFiles
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-# Import the router that lives in the same package
+# Import the routers that live in the same package
 from backend.routes.gerber import router
+from backend.routes.printer_3d import router as router_3d
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -45,13 +46,20 @@ app = FastAPI(
 # Allow the Vite dev server (http://localhost:5173) to call the API during development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5174", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 
-# Register the API routes defined in backend/routes.py
+# Register the API routes defined in backend/routes/
 app.include_router(router)
+app.include_router(router_3d)
 
 # ---------------------------------------------------------------------------
 # Serve the React production build (frontend/dist)

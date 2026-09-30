@@ -12,3 +12,7 @@ pydantic-settings==2.12.0
 
 # Gerber / PCB parsing
 gerbonara>=1.6.3
+
+# 3D file parsing
+cadquery                  # OpenCASCADE bindings for STP/STEP; also pulls in OCC
+# trimesh[easy]           # future: STL, OBJ, 3MF
